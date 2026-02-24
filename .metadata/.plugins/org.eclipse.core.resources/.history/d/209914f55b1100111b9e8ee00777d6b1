@@ -179,15 +179,12 @@ void SystemClock_Config(void)
 // This function runs every 10ms automatically based on Timer 2
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM2) {
+        // Toggle the Green LED (LD2) every 10ms
+        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+
         t += Ts;
         mon_setpoint = sinf(2.0f * 3.14159f * 0.5f * t);
-
-        // --- ADD THESE FOR TESTING ---
         mon_error = mon_setpoint - mon_motor_y;
-        mon_control_u = u_n1 + (Kp * (mon_error - e_n1)) + (Ki * Ts * mon_error);
-        u_n1 = mon_control_u;
-        e_n1 = mon_error;
-        // -----------------------------
     }
 }
 // Keep this for HIL - it handles the UART data exchange
