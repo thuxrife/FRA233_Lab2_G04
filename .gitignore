@@ -1,1 +1,21 @@
-**/.metadata
+
+# --- STM32 Specific ---
+.metadata/
+**/Debug/
+**/Release/
+*.elf
+*.bin
+*.map
+*.hex
+*.list
+*.o
+*.d
+.settings/
+.cache/
+
+# --- MATLAB Specific ---
+*.asv
+*.slxc
+*.mex*
+*.log
+slprj/
