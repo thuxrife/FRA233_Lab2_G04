@@ -164,3 +164,10 @@ Finished building: default.size.stdout
  
 Finished building: part1_discetize.list
  
+15:56:18 **** Incremental Build of configuration Debug for project part1_discetize ****
+make -j28 all 
+arm-none-eabi-size  part1_discetize.elf 
+   text	   data	    bss	    dec	    hex	filename
+  22388	     20	   2020	  24428	   5f6c	part1_discetize.elf
+Finished building: default.size.stdout
+ 
