@@ -3,7 +3,7 @@ clear; clc;
 
 % Physical Parameters
 kt = 50.6e-3; ke = 52.8e-3; R = 3.3133; Lm = 2.8544e-3;
-b = 77.851e-6; J = 58.559e-6; Ts = 0.0002; 
+b = 77.851e-6; J = 58.559e-6; Ts = 0.001; 
 
 % Continuous TF: Speed/Voltage
 s = tf('s');
