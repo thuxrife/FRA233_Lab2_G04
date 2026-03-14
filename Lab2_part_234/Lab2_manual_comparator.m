@@ -38,111 +38,139 @@
 % data.plant_effort.v_pid_out       % PID portion of the total plant input
 
 %% 1. Configuration
-% Define the Root path once
 base_path = 'C:\Users\User\Documents\GitHub\FRA233_Lab2_G04\Lab2_part_234\';
 
-% Matrix 1: Only the unique sub-folders
-% We use 'fullfile' inside the loop to join these to the base_path
-sub_folders = {
-   'lab2_part2_results\KI3_aw\P0.06_I0.01_D0.00\Run_05_2026-03-14_232754_TimeSeries';
-   'lab2_part2_results\KI3_aw\P0.06_I0.05_D0.00\Run_05_2026-03-14_232817_TimeSeries';
+% ARRAY 1: Data Slots (The "Subjects")
+% Add as many folders as you want here.
+folder_slots = {
+   % 'lab2_part2_results\KI_test\P0.06_I0.01_D0.00\Run_00_2026-03-15_004534_TimeSeries';
+    % 'lab2_part2_results\KI_test\P0.06_I0.05_D0.00\Run_00_2026-03-15_004616_TimeSeries';
+    'lab2_part2_results\KI_test\P0.06_I0.01_D0.00\Run_02_2026-03-15_022025_TimeSeries';
+    'lab2_part2_results\KI_test\P0.06_I0.05_D0.00\Run_02_2026-03-15_022059_TimeSeries';
+    % 'lab2_part2_results\KI_test\P0.06_I0.50_D0.00\Run_01_2026-03-15_022900_TimeSeries';
+    'lab2_part2_results\KI_test\P0.06_I0.10_D0.00\Run_02_2026-03-15_022832_TimeSeries';
+
 };
 
-% Matrix 2: The Signals (1-to-1 mapping)
-process_list = {
-    'sensor', 'ref_rad',        'left';
-    'sensor', 'ref_rad','left';
+% --- TIME WINDOW (Viewfinder) ---
+plot_start = 0.0;
+plot_stop  = 10.0;
+
+% ARRAY 2: Properties
+% Columns: {Group, Signal, Y-Axis, Base_Color, Line_Style}
+compare_props = {
+    % --- GROUP 1: SENSORS (Left Axis: Degrees) ---
+    'sensor',       'ref_rad',             'left',  '#000000',   '-';   % BLACK (The King)
+    'sensor',       'sensor_measured',     'left',  '#982598',   '-';   % ORANGE 
+    % 'sensor',       'err_rad',             'left',  '#A52A2A',   '--';  
+    % 'sensor',       'sensor_measured_raw', 'left',  '#808080',   ':';   
+    % 'sensor',       'sensor_noise',        'left',  '#D2691E',   ':';   
+
+    % % --- GROUP 2: CONTROLLER (Right Axis: Volts) ---
+    % 'controller',   'v_pid_sat',           'right', '#1A05A2',   '-';   % BLUE
+    % 'controller',   'v_pid',               'right', '#1A05A2',   '--';  
+    % 'controller',   'KP_sat',              'right', '#8F0177',   '-';   % CYAN
+    % 'controller',   'KP',                  'right', '#8F0177',   '--';  
+    % 'controller',   'KI_sat',              'right', '#F67D31',   '-';   % ROYAL BLUE
+    'controller',   'KI',                  'right', '#F67D31',   '--';  
+    % 'controller',   'KD_sat',              'right', '#8A2BE2',   '--';   % PURPLE
+    % 'controller',   'KD',                  'right', '#8A2BE2',   '-';  
+    
+    % % --- GROUP 3: PLANT EFFORT (Right Axis: Volts) ---
+    % 'plant_effort', 'plant_input_sat',     'right', '#FF0000',   '-';   % RED
+    % 'plant_effort', 'plant_input',         'right', '#FF0000',   '--';  
+    % 'plant_effort', 'v_pid_out',           'right', '#FF6347',   '-';   
+    % 'plant_effort', 'v_compense',          'right', '#8B0000',   '-';   % MAROON
 };
 
-%% 2. Processing and Plotting Logic
-clf; 
-fig = gcf;
-set(fig, 'Color', 'w', 'Units', 'normalized', 'Position', [0.1, 0.1, 0.8, 0.7]);
+%% 2. TASK 1: THE COMBINED PICTURE (Comparison)
+figure(1); clf; hold on; grid on;
+set(gcf, 'Color', 'w', 'Units', 'normalized', 'Position', [0.05, 0.5, 0.4, 0.4]);
 
-% Initialize Detectors
-hasLeft = false;   
-hasRight = false;  
-leftLabel = '';
-rightLabel = '';
+white_ratios = [0.0, 0.25, 0.65, 0.90]; 
+run_analysis(folder_slots, compare_props, base_path, white_ratios, plot_start, plot_stop, 'All-in-One Comparison');
 
-hold on; grid on;
-colors = lines(numel(sub_folders));
-
-for i = 1:numel(sub_folders)
-    % LOGIC: Combine the base_path with the sub_folder
-    f_path      = fullfile(base_path, sub_folders{i});
-    group_name  = process_list{i, 1};
-    signal_name = process_list{i, 2};
-    side_pref   = process_list{i, 3}; 
+%% 3. TASK 2: INDIVIDUAL PICTURES (Deep Dives)
+for i = 1:numel(folder_slots)
+    figure(i + 1); clf; hold on; grid on;
+    set(gcf, 'Color', 'w', 'Units', 'normalized', 'Position', [0.5, 0.5 - (i*0.1), 0.4, 0.4]);
     
-    mat_file = fullfile(f_path, 'raw_sim_data.mat');
+    % Logic: For individual plots, we use [0] so the color is 100% vibrant
+    individual_slot = folder_slots(i);
+    run_analysis(individual_slot, compare_props, base_path, [0], plot_start, plot_stop, sprintf('Individual Analysis: Run %d', i));
+end
+
+%% --- REUSABLE CORE LOGIC (Hex Markers + 10% Margin) ---
+function run_analysis(slots, props, base, ratios, t_start, t_stop, title_str)
+    hasLeft = false; hasRight = false;
     
-    if exist(mat_file, 'file')
-        load(mat_file); 
+    % Step 1: Signal Plotting Loop
+    for f = 1:numel(slots)
+        load(fullfile(base, slots{f}, 'raw_sim_data.mat'));
         t = data.plant_effort.time;
         
-        try
-            y = data.(group_name).(signal_name);
-            
-            % Select side
-            yyaxis(side_pref); 
-            
-            % Unit logic & Dynamic Label Syncing
-            if strcmp(group_name, 'sensor')
-                y = y * (180/pi); 
-                unit_tag = '[deg]';
-                current_type = 'Angle (Degrees)';
-            else
-                unit_tag = '[V]';
-                current_type = 'Control Effort (Volts)';
-            end
-            
-            % Sync Labels
-            if strcmp(side_pref, 'left')
-                hasLeft = true; leftLabel = current_type;
-            else
-                hasRight = true; rightLabel = current_type;
-            end
-            
-            % Use the folder name in the legend so you know which I-gain it is
-            folder_parts = strsplit(sub_folders{i}, '\');
-            run_info = folder_parts{2}; % This gets the "P0.06_I0.05..." part
-            
-            display_name = sprintf('%s: %s', run_info, signal_name);
-            plot(t, y, 'LineWidth', 1.5, 'DisplayName', display_name, 'Color', colors(i,:));
-            
-        catch ME
-            fprintf('[ERROR] Signal "%s" failed in folder %d\n', signal_name, i);
+        for p = 1:size(props, 1)
+            grp=props{p,1}; sig=props{p,2}; side=props{p,3}; hex=props{p,4}; style=props{p,5};
+            try
+                y = data.(grp).(sig);
+                yyaxis(side);
+                if strcmp(side, 'left'), hasLeft = true; else, hasRight = true; end
+                
+                c = [hex2dec(hex(2:3)), hex2dec(hex(4:5)), hex2dec(hex(6:7))]/255;
+                if strcmp(sig, 'ref_rad'), final_c = [0 0 0]; lw = 2; else, final_c = c + (1-c)*ratios(f); lw = 1.5; end
+                
+                if strcmp(grp, 'sensor'), y = y * (180/pi); end
+                plot(t, y, 'Color', final_c, 'LineWidth', lw, 'LineStyle', style, ...
+                     'Marker', 'none', 'DisplayName', sprintf('Run%d: %s', f, sig));
+            catch, end
         end
-    else
-        fprintf('[PATH ERROR] Cannot find: %s\n', f_path);
+        
+        % Step 2: VERTICAL EVENT MARKERS (Hex Colored)
+        if isfield(data, 'motor_state') && f == 1
+            yyaxis left; 
+            state = data.motor_state;
+            changes = find(diff(state) ~= 0);
+            for idx = 1:length(changes)
+                t_ev = t(changes(idx));
+                
+                if state(changes(idx)) == 1 && state(changes(idx)+1) == 0
+                    % STALL: Using Hex #D9534F (Soft Red)
+                    c_hex = '#D9534F';
+                    xl = xline(t_ev, '--', 'Stall', 'LineWidth', 2);
+                else
+                    % RELEASE: Using Hex #5CB85C (Soft Green)
+                    c_hex = '#5CB85C';
+                    xl = xline(t_ev, '-', 'Release', 'LineWidth', 2);
+                end
+                
+                % Apply Hex Color to Line and Text
+                xl.Color = [hex2dec(c_hex(2:3)), hex2dec(c_hex(4:5)), hex2dec(c_hex(6:7))]/255;
+                
+                % Label Formatting (Horizontal & Centered)
+                xl.LabelOrientation = 'horizontal';
+                xl.LabelVerticalAlignment = 'top';
+                xl.LabelHorizontalAlignment = 'center';
+                xl.HandleVisibility = 'off';
+            end
+        end
     end
+    
+    % Step 3: APPLY 10% VERTICAL MARGINS
+    % Margin for Left (Degrees)
+    yyaxis left;
+    yl_l = ylim; padding_l = diff(yl_l) * 0.10;
+    ylim([yl_l(1) - padding_l, yl_l(2) + padding_l]);
+    ylabel('Angle (Deg)'); set(gca, 'YColor', 'k');
+    
+    % Margin for Right (Voltage)
+    yyaxis right;
+    yl_r = ylim; padding_r = diff(yl_r) * 0.10;
+    ylim([yl_r(1) - padding_r, yl_r(2) + padding_r]);
+    ylabel('Effort (V)'); set(gca, 'YColor', 'k');
+    
+    % Step 4: Final Formatting
+    xlabel('Time (s)'); xlim([t_start, t_stop]);
+    title(title_str); 
+    legend('show', 'Location', 'northeastoutside', 'Interpreter', 'none');
+    grid on;
 end
-
-%% 3. FINAL FORMATTING (Synced to Actual Inputs)
-xlabel('Time (s)');
-
-% Update Left Side
-yyaxis left;
-if ~hasLeft
-    set(gca, 'YTick', [], 'YColor', 'none'); 
-    ylabel('');
-else
-    ylabel(leftLabel); 
-    set(gca, 'YColor', 'k', 'YTickMode', 'auto');
-end
-
-% Update Right Side
-yyaxis right;
-if ~hasRight
-    set(gca, 'YTick', [], 'YColor', 'none'); 
-    ylabel('');
-else
-    ylabel(rightLabel);
-    set(gca, 'YColor', 'k', 'YTickMode', 'auto');
-end
-
-title('Comparative Analysis (Unit Synced)');
-
-% Legend outside the box prevents blocking the "sawtooth" spikes
-legend('show', 'Location', 'northeastoutside', 'Interpreter', 'none');
