@@ -1,41 +1,47 @@
-%% --- Multi-Run Test Matrix Setup ---
+%% --- Categorized Multi-Run Setup ---
 
-% 1. Shared Baseline (Parameters that rarely change)
-p_base.ref_time = [0, 10]; 
-p_base.ref_data = [180, 180];
-p_base.init = 0;
-p_base.method = 1;
-p_base.stop_time = 10;
+% [Start, Just-Before-Jump, The-Jump, End]
+p_base.ref_time = [0,  2,  2.001,  10]; 
+p_base.ref_data = [0,  0,  90,     90];
+% Automatically set stop_time based on the last value in ref_time
+p_base.stop_time     = p_base.ref_time(end); 
+
+p_base.init          = 0;
+p_base.method        = 1;
 p_base.master_folder = 'lab2_part2_results';
-p_base.gravity_mode = 1; 
+p_base.gravity_mode  = 1;
 
-% 2. The Test Matrix (Each row is a new Run)
+% 2. The Multi-Category Test Matrix
 % Columns: [Kp, Ki, Kd, N]
 test_matrix = [
-    0.06, 0.00, 0.00, 100;  % Run 1: Pure P-control
-    0.06, 0.01, 0.00, 100;  % Run 2: PI-control (testing Ki)
-    0.06, 0.01, 0.02, 100;  % Run 3: PID-control (testing Kd)
-    0.06, 0.01, 0.02, 50 ;  % Run 4: PID-control (testing N/Filter)
+    0.06, 0.01, 0.00, 100;  % Run 1 (Ki Category)
+    0.06, 0.05, 0.00, 100;  % Run 2 (Ki Category)
 ];
 
-% Custom names for the folders to keep them organized
-trial_names = {'P_Only', 'PI_Test', 'PID_Base', 'PID_Low_N'};
+% Corresponding Category Labels
+% Note: Using 'Ki' twice will put both Run 1 and Run 2 in the same 'Ki' folder.
+categories = {'KI3_aw', 'KI3_aw'};
 
 % 3. Automated Execution Loop
 for i = 1:size(test_matrix, 1)
     p = p_base;
     
-    % Map the matrix row to the parameter struct
+    % Extract Parameters
     p.kp = test_matrix(i, 1);
     p.ki = test_matrix(i, 2);
     p.kd = test_matrix(i, 3);
     p.N  = test_matrix(i, 4);
-    p.trial_name = trial_names{i};
     
-    fprintf('--- Executing Run %d: %s ---\n', i, p.trial_name);
-    fprintf('Settings: Kp=%.3f, Ki=%.3f, Kd=%.3f, N=%d\n', p.kp, p.ki, p.kd, p.N);
+    % DYNAMIC CATEGORY NAMING
+    % Structure: master_folder / Category_Name / Run_Details
+    current_cat = categories{i};
+    run_details = sprintf('P%.2f_I%.2f_D%.2f', p.kp, p.ki, p.kd);
+    
+    p.trial_name = fullfile(current_cat, run_details);
+    
+    fprintf('--- [%d/%d] Category: %s | Run: %s ---\n', i, length(categories), current_cat, run_details);
     
     Lab2_manual_simulate_controller(p);
+    
+    pause(1.1); % Ensure unique timestamps for the sub-folders
 end
-
-fprintf('Done. All results saved to %s\n', p_base.master_folder);
