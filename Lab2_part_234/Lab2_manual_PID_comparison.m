@@ -1,140 +1,147 @@
-%% --- 1. CONFIGURATION ---
-clear; clc;
+%% --- LAB 2: FINAL PERFORMANCE PLOT (MULTI-TRIAL & NAMED LIMITS) ---
+clear; clc; close all;
 MASTER_FOLDER = 'lab2_part2_results'; 
-angles_header = 30:30:360; 
+TYPE = 'P'; % เลือก 'P' หรือ 'PID'
 
-% Requirements for Status Calculation 
-PO_LIMIT_VAL = 10; 
-TP_LIMIT_VAL = 3.0;
+% --- 1. ตั้งค่าเกณฑ์และชื่อตามประเภท Controller ---
+if strcmp(TYPE, 'P')
+    sub_trials = dir(fullfile(MASTER_FOLDER, 'P_tuning*'));
+    num_plots = 2; labels = {'Percent Overshoot (P.O.)', 'Peak Time (Tp)'};
+    limits = [10, 3.0];
+    limit_names = {'P.O. Limit', 'Tp Limit'};
+else
+    sub_trials = dir(fullfile(MASTER_FOLDER, 'PID_Kp*'));
+    num_plots = 3; labels = {'Percent Overshoot (P.O.)', 'Settling Time (Ts)', 'Steady State Error (Ess)'};
+    limits = [5, 2.5, 0.004];
+    limit_names = {'P.O. Limit', 'Ts Limit', 'Ess Limit'};
+end
 
-sub_trials = dir(fullfile(MASTER_FOLDER, 'P_tuning*')); 
-sub_trials = sub_trials([sub_trials.isdir]); 
+sub_trials = sub_trials([sub_trials.isdir]);
+fig = figure('Color', 'w', 'Units', 'normalized', 'Position', [0.05, 0.05, 0.9, 0.85]);
+ax_handles = gobjects(1, num_plots);
 
-%% --- 2. DATA EXTRACTION & ANALYSIS ---
-summary_data = struct([]); 
-error_map_data = struct([]); 
-po_deg_map = struct([]); 
+fprintf('====================================================\n');
+fprintf('   ANALYSIS START: %d TRIALS FOUND (%s MODE)\n', length(sub_trials), TYPE);
+fprintf('====================================================\n');
 
+% --- 2. วนลูปอ่านข้อมูลทีละชุด Gain (Trial) ---
 for i = 1:length(sub_trials)
     current_sub = sub_trials(i).name;
     sub_path = fullfile(MASTER_FOLDER, current_sub);
-    runs = dir(fullfile(sub_path, 'sim_run_*'));
-    runs = runs([runs.isdir]);
+    runs = dir(fullfile(sub_path, 'Run_*'));
+    angles = []; data_matrix = [];
     
-    if isempty(runs), continue; end
-    
-    % NEW: Added Ki and Kd to the row structures
-    tuning_row = struct('Tuning', current_sub, 'Kp', NaN, 'Ki', NaN, 'Kd', NaN);
-    error_row = struct('Tuning', current_sub, 'Kp', NaN, 'Ki', NaN, 'Kd', NaN);
-    po_row = struct('Tuning', current_sub, 'Kp', NaN, 'Ki', NaN, 'Kd', NaN);
-    
-    for ang = angles_header
-        col_name = sprintf('Deg_%d', ang);
-        tuning_row.(col_name) = 'MISSING';
-        error_row.(col_name) = NaN;
-        po_row.(col_name) = NaN;
-    end
+    fprintf('\n[STATE] Processing Trial %d: %s\n', i, current_sub);
     
     for j = 1:length(runs)
-        run_folder = runs(j).name;
-        profile_file = fullfile(sub_path, run_folder, 'System_Profile.xlsx');
+        run_dir = fullfile(sub_path, runs(j).name);
+        file_data = fullfile(run_dir, 'raw_sim_data.mat');
+        file_meta = fullfile(run_dir, 'metadata.mat');
         
-        if exist(profile_file, 'file')
-            T_prof = readtable(profile_file); 
-            vars = T_prof.Properties.VariableNames;
+        if exist(file_data, 'file') && exist(file_meta, 'file')
+            S_data = load(file_data); S_meta = load(file_meta);
             
-            % Map Gains (with safety checks for older files) 
-            if j == 1
-                tuning_row.Kp = T_prof.Kp(1);
-                error_row.Kp = T_prof.Kp(1);
-                po_row.Kp = T_prof.Kp(1);
-                
-                % Check for Ki
-                if ismember('Ki', vars), val_ki = T_prof.Ki(1); else, val_ki = 0; end
-                tuning_row.Ki = val_ki; error_row.Ki = val_ki; po_row.Ki = val_ki;
-                
-                % Check for Kd
-                if ismember('Kd', vars), val_kd = T_prof.Kd(1); else, val_kd = 0; end
-                tuning_row.Kd = val_kd; error_row.Kd = val_kd; po_row.Kd = val_kd;
-            end
+            % ดึงค่า Gain และเป้าหมาย
+            kp = S_meta.params.kp; 
+            ki = ifthen(isfield(S_meta.params, 'ki'), S_meta.params.ki, 0);
+            kd = ifthen(isfield(S_meta.params, 'kd'), S_meta.params.kd, 0);
+            ref_deg = S_meta.params.ref_data(2); 
             
-            ang_val = T_prof.Target_Angle(1);
-            col_name = sprintf('Deg_%d', ang_val);
+            fprintf('   > Reading Angle: %3d deg\n', ref_deg);
             
-            % Extract Performance Metrics
-            act_po = T_prof.Actual_PO(1); 
-            act_tp = T_prof.Actual_Tp(1); 
-            ss_err = abs(T_prof.SS_Error(1)); 
+            time_vec = S_data.data.plant_effort.time;
+            measured_vec = S_data.data.sensor.sensor_measured;
             
-            % Status Calculation Logic
-            if strcmpi(T_prof.Status{1}, 'UNSTABLE')
-                tuning_row.(col_name) = 'VIB';
-            elseif act_po <= PO_LIMIT_VAL && act_tp <= TP_LIMIT_VAL
-                tuning_row.(col_name) = 'PASSED';
-            elseif act_po > PO_LIMIT_VAL && act_tp > TP_LIMIT_VAL
-                tuning_row.(col_name) = 'BOTH';
-            elseif act_po > PO_LIMIT_VAL
-                tuning_row.(col_name) = 'O.P.';
+            % --- จุดสำคัญ: คำนวณ P.O. และ Ts (2%) เทียบกับ Steady State จริง ---
+            actual_ss_val = measured_vec(end);
+            s_info = stepinfo(measured_vec, time_vec, actual_ss_val, 'SettlingThreshold', 0.02); 
+            
+            % คำนวณ Error เทียบกับเป้าหมาย (ref_deg)
+            ss_err_rad = deg2rad(ref_deg) - deg2rad(actual_ss_val);
+            
+            angles(end+1) = ref_deg;
+            if strcmp(TYPE, 'P')
+                data_matrix(end+1,:) = [s_info.Overshoot, s_info.PeakTime];
+                data_legend = sprintf('Kp=%.2f', kp);
             else
-                tuning_row.(col_name) = 'Tp';
-            end
-            
-            error_row.(col_name) = ss_err;
-            po_row.(col_name) = act_po; 
-        end
-    end
-    summary_data = [summary_data, tuning_row]; %#ok<AGROW>
-    error_map_data = [error_map_data, error_row]; %#ok<AGROW>
-    po_deg_map = [po_deg_map, po_row]; %#ok<AGROW>
-end
-
-% Sort Tables by Kp 
-FinalTable = struct2table(summary_data);
-ErrorTable = struct2table(error_map_data);
-POTable = struct2table(po_deg_map);
-[~, sort_idx] = sort(FinalTable.Kp);
-FinalTable = FinalTable(sort_idx, :);
-ErrorTable = ErrorTable(sort_idx, :);
-POTable = POTable(sort_idx, :);
-
-%% --- 3. VISUALIZATION ---
-fig = figure('Name', 'PID Control Analysis Heatmap', 'Color', 'w', 'Position', [100, 100, 1500, 600]);
-display_data = table2cell(FinalTable);
-error_vals = table2cell(ErrorTable);
-po_vals = table2cell(POTable);
-
-% Format all Gain columns for high precision
-for k = 2:4 % Kp, Ki, Kd columns
-    display_data(:,k) = cellfun(@(x) sprintf('%.9f', x), display_data(:,k), 'UniformOutput', false);
-end
-
-uit = uitable(fig, 'Data', display_data, 'ColumnName', FinalTable.Properties.VariableNames, ...
-    'Units', 'Normalized', 'Position', [0.03 0.05 0.94 0.9]);
-
-% Apply Coloring Logic per Cell 
-[rows, cols] = size(display_data);
-for r = 1:rows
-    for c = 5:cols % Angle columns start at index 5 now (Tuning, Kp, Ki, Kd are 1-4)
-        status_val = display_data{r,c};
-        err = error_vals{r,c};
-        po_act = po_vals{r,c};
-        
-        if strcmpi(status_val, 'MISSING'), continue; end
-        
-        if strcmpi(status_val, 'PASSED')
-            addStyle(uit, uistyle('BackgroundColor', [0.8 1.0 0.8]), 'cell', [r, c]);
-        elseif strcmpi(status_val, 'VIB')
-            addStyle(uit, uistyle('BackgroundColor', [0.3 0.3 0.3], 'FontColor', 'w'), 'cell', [r, c]);
-        else
-            if (strcmpi(status_val, 'O.P.') || strcmpi(status_val, 'BOTH')) && po_act > 30
-                addStyle(uit, uistyle('BackgroundColor', [1.0 0.6 0.6], 'FontWeight', 'bold'), 'cell', [r, c]);
-            elseif (strcmpi(status_val, 'O.P.') || strcmpi(status_val, 'BOTH'))
-                addStyle(uit, uistyle('BackgroundColor', [1.0 0.8 0.4]), 'cell', [r, c]);
-            elseif err >= 0.1
-                addStyle(uit, uistyle('BackgroundColor', [1.0 0.7 0.7]), 'cell', [r, c]);
-            else
-                addStyle(uit, uistyle('BackgroundColor', [1.0 1.0 0.7]), 'cell', [r, c]);
+                data_matrix(end+1,:) = [s_info.Overshoot, s_info.SettlingTime, ss_err_rad];
+                data_legend = sprintf('Kp=%.2f, Ki=%.3f, Kd=%.4f', kp, ki, kd);
             end
         end
     end
+
+    if isempty(data_matrix), continue; end
+
+    % --- 3. พล็อตข้อมูล Trial ลงแกนกราฟ ---
+    for k = 1:num_plots
+        if ~isgraphics(ax_handles(k)), ax_handles(k) = subplot(num_plots, 1, k); hold on; grid on; end
+        
+        % พล็อตเส้นกราฟพร้อมระบุชื่อ Gain ใน Legend
+        p = plot(ax_handles(k), angles, data_matrix(:,k), '-o', 'MarkerSize', 5, 'LineWidth', 1.2, ...
+            'DisplayName', data_legend);
+        
+        % ตัวเลขกำกับจุด (0.4f)
+        for pt = 1:length(angles)
+            val = data_matrix(pt,k);
+            txt = ifthen(isnan(val), 'NaN', sprintf('%.4f', val));
+            text(ax_handles(k), angles(pt), val, txt, 'VerticalAlignment', 'bottom', ...
+                'HorizontalAlignment', 'center', 'FontSize', 8, 'Color', p.Color);
+        end
+    end
+end
+
+% --- 4. จัดการ Layout และ Named Legend สำหรับเส้น Limit (ทำครั้งเดียว) ---
+valid_axes = ax_handles(isgraphics(ax_handles));
+for k = 1:length(valid_axes)
+    ax = valid_axes(k);
+    limit_val = limits(k);
+    limit_label = limit_names{k};
+    xl = [0, 400]; set(ax, 'XLim', xl);
+    
+    if k <= 2 % สำหรับ P.O. และ Time (แกนเริ่มที่ 0, Limit อยู่กลาง)
+        y_range_max = limit_val * 2;
+        lines = findobj(ax, 'Type', 'line'); y_all = [];
+        for ln = 1:length(lines), y_all = [y_all, get(lines(ln), 'YData')]; end
+        y_all = y_all(~isnan(y_all) & ~isinf(y_all));
+        if ~isempty(y_all) && max(y_all) > y_range_max, y_range_max = max(y_all) * 1.2; end
+        set(ax, 'YLim', [0, y_range_max]);
+        
+        % วาดเส้น Limit และตั้งชื่อใน Legend
+        yline(ax, limit_val, '--r', 'LineWidth', 2, 'DisplayName', limit_label);
+        
+        % พื้นที่สี (Patch)
+        patch(ax, [xl(1) xl(2) xl(2) xl(1)], [0 0 limit_val limit_val], [0.8 1 0.8], 'EdgeColor', 'none', 'FaceAlpha', 0.1, 'HandleVisibility', 'off');
+        patch(ax, [xl(1) xl(2) xl(2) xl(1)], [limit_val y_range_max*2 y_range_max*2 limit_val], [1 0.8 0.8], 'EdgeColor', 'none', 'FaceAlpha', 0.1, 'HandleVisibility', 'off');
+        
+    else % สำหรับ Ess (+/- Limit สมมาตรรอบ 0)
+        y_range_edge = limit_val * 2;
+        lines = findobj(ax, 'Type', 'line'); y_all = [];
+        for ln = 1:length(lines), y_all = [y_all, get(lines(ln), 'YData')]; end
+        y_all = y_all(~isnan(y_all) & ~isinf(y_all));
+        if ~isempty(y_all) && max(abs(y_all)) > y_range_edge, y_range_edge = max(abs(y_all)) * 1.2; end
+        set(ax, 'YLim', [-y_range_edge, y_range_edge]);
+        
+        % วาดเส้น Limit +/- และตั้งชื่อใน Legend
+        yline(ax, limit_val, '--r', 'LineWidth', 1.5, 'DisplayName', ['+' limit_label]);
+        yline(ax, -limit_val, '--r', 'LineWidth', 1.5, 'DisplayName', ['-' limit_label]);
+        yline(ax, 0, 'k-', 'HandleVisibility', 'off');
+        
+        % พื้นที่สี
+        patch(ax, [xl(1) xl(2) xl(2) xl(1)], [-limit_val -limit_val limit_val limit_val], [0.8 1 0.8], 'EdgeColor', 'none', 'FaceAlpha', 0.1, 'HandleVisibility', 'off');
+        patch(ax, [xl(1) xl(2) xl(2) xl(1)], [limit_val limit_val 10 10], [1 0.8 0.8], 'EdgeColor', 'none', 'FaceAlpha', 0.1, 'HandleVisibility', 'off');
+        patch(ax, [xl(1) xl(2) xl(2) xl(1)], [-limit_val -limit_val -10 -10], [1 0.8 0.8], 'EdgeColor', 'none', 'FaceAlpha', 0.1, 'HandleVisibility', 'off');
+    end
+    
+    ylabel(ax, labels{k}, 'FontWeight', 'bold');
+    
+    % แสดง Legend สรุปทั้งข้อมูล Gain และชื่อเส้น Limit
+    lgd = legend(ax, 'show', 'Location', 'eastoutside', 'Interpreter', 'none');
+    
+    set(ax, 'Position', [0.1, 0.95 - k*(0.9/num_plots) + 0.05, 0.60, (0.8/num_plots)]);
+end
+if ~isempty(valid_axes), xlabel(valid_axes(end), 'Target Angle (Degrees)', 'FontWeight', 'bold'); end
+fprintf('\n[FINISHED] Multi-trial Analysis Complete.\n');
+
+function out = ifthen(cond, valTrue, valFalse)
+    if cond, out = valTrue; else, out = valFalse; end
 end

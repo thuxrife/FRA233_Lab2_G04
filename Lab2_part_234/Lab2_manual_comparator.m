@@ -40,21 +40,22 @@
 %% 1. Configuration
 base_path = 'C:\Users\User\Documents\GitHub\FRA233_Lab2_G04\Lab2_part_234\';
 
+
 % ARRAY 1: Data Slots (The "Subjects")
 % Add as many folders as you want here.
 folder_slots = {
    % 'lab2_part2_results\KI_test\P0.06_I0.01_D0.00\Run_00_2026-03-15_004534_TimeSeries';
     % 'lab2_part2_results\KI_test\P0.06_I0.05_D0.00\Run_00_2026-03-15_004616_TimeSeries';
-    'lab2_part2_results\KI_test\P0.06_I0.01_D0.00\Run_02_2026-03-15_022025_TimeSeries';
-    'lab2_part2_results\KI_test\P0.06_I0.05_D0.00\Run_02_2026-03-15_022059_TimeSeries';
+    % 'lab2_part2_results\KI_test\P0.06_I0.01_D0.00\Run_02_2026-03-15_022025_TimeSeries';
+    % 'lab2_part2_results\KI_test\P0.06_I0.05_D0.00\Run_02_2026-03-15_022059_TimeSeries';
     % 'lab2_part2_results\KI_test\P0.06_I0.50_D0.00\Run_01_2026-03-15_022900_TimeSeries';
-    'lab2_part2_results\KI_test\P0.06_I0.10_D0.00\Run_02_2026-03-15_022832_TimeSeries';
+    'lab2_part2_results\PID_Kp_0.06_Ki_0.00_Kd_0.00_N_100_WithGrav\Run_11_2026-03-15_174947_TimeSeries';
 
 };
 
 % --- TIME WINDOW (Viewfinder) ---
 plot_start = 0.0;
-plot_stop  = 10.0;
+plot_stop  = 20.0;
 
 % ARRAY 2: Properties
 % Columns: {Group, Signal, Y-Axis, Base_Color, Line_Style}
