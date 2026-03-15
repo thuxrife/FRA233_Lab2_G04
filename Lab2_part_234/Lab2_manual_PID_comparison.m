@@ -1,7 +1,7 @@
 %% --- LAB 2: FINAL PERFORMANCE PLOT (MULTI-TRIAL & NAMED LIMITS) ---
 clear; clc; close all;
 MASTER_FOLDER = 'lab2_part2_results'; 
-TYPE = 'P'; % เลือก 'P' หรือ 'PID'
+TYPE = 'PID'; % เลือก 'P' หรือ 'PID'
 
 % --- 1. ตั้งค่าเกณฑ์และชื่อตามประเภท Controller ---
 if strcmp(TYPE, 'P')

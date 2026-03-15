@@ -16,15 +16,15 @@ Jm = 58.559e-6;
 J = Jm;
 T = Lm/Rm;
 
-kp = 0.071701766537834;
-ki = 0;
-kd = 0;
+kp = 0.633530931368352;
+ki = 0.135074981663514;
+kd = 0.445677002795575;
+N = 1389.45650582566;
 ref_angle = 180;
 init_angle = 0;
 gravity_compensation_mode = 1;
 method_pid = 2;
 
-N = 100;
 
 % z2 = (Jm * mp*L^2)* Lm;
 % z1 = (mp*L^2 + Jm);
