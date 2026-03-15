@@ -22,7 +22,7 @@ kd = 0;
 ref_angle = 180;
 init_angle = 0;
 gravity_compensation_mode = 1;
-method_pid = 2;
+method_pid = 1;
 
 N = 100;
 
