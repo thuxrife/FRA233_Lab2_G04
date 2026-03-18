@@ -1,4 +1,4 @@
-%% --- LAB 2: AUTOMATION SCRIPT (DEGREE VERSION) ---
+%% --- LAB 2: AUTOMATION SCRIPT (DEGREE VERSION - STEP INPUT) ---
 clear; clc;
 MASTER_FOLDER = 'lab2_part2_results'; 
 if ~exist(MASTER_FOLDER, 'dir'), mkdir(MASTER_FOLDER); end
@@ -6,13 +6,12 @@ if ~exist(MASTER_FOLDER, 'dir'), mkdir(MASTER_FOLDER); end
 % --- CONFIGURATION TABLE ---
 % รูปแบบ: [Kp, Ki, Kd, N, GravityMode]
 tuning_configs = [
-    % 0.06, 0.0, 0.0, 100, 0;
-    0.633530931368352, 0.000, 0.00, 1000, 1;
+    % 0.066353093136835, 0.00, 0.00, 1000,1;
+    % 0.066353093136835, 0.000, 0.00, 1000, 1;
+    0.1,0,0,0,1;
+    0.02,0,0,0,1;
 ];
-
-
 angles_to_test = 30:30:360; 
-
 model_name = 'Lab2_single_loop_controller_student';
 load_system(model_name); 
 
@@ -32,14 +31,14 @@ for row = 1:size(tuning_configs, 1)
     end
     
     for target_deg = angles_to_test
-        % --- 1. ส่งตัวแปรไป Base Workspace (หน่วย Degree) ---
+        % --- 1. ส่งตัวแปรไป Base Workspace ---
         assignin('base', 'kp', kp_val);
         assignin('base', 'ki', ki_val);
         assignin('base', 'kd', kd_val);
         assignin('base', 'N', n_val);
         assignin('base', 'gravity_mode', grav_val); 
         
-        % --- 2. เตรียมชุด Params สำหรับฟังก์ชัน Simulate & Save ---
+        % --- 2. เตรียมชุด Params สำหรับการ Simulate ---
         params.kp = kp_val; 
         params.ki = ki_val; 
         params.kd = kd_val;
@@ -47,19 +46,21 @@ for row = 1:size(tuning_configs, 1)
         params.gravity_mode = grav_val;
         
         params.init = 0; 
-        params.method = 1; 
-        params.stop_time = 20.0;
+        params.method = 5; 
+        params.stop_time = 20.0; % เวลาสิ้นสุดการรัน Simulation
         params.master_folder = MASTER_FOLDER;
         params.trial_name = trial_name;
         
-        % --- จุดที่แก้ไข: ไม่ต้องใช้ deg2rad แล้ว ส่ง target_deg ไปตรงๆ ---
-        params.ref_time = [0; 0.1; 5.0];
-        params.ref_data = [0; target_deg; target_deg]; % <--- เป็น Degree แล้ว
+        % --- แก้ไขจุดนี้: ปรับเป็น Unit Step ให้เริ่มที่วินาทีที่ 1 ---
+        % ใช้เวลา 1.0 และ 1.0001 เพื่อให้ค่ากระโดดขึ้นทันที
+        % และใช้ 20.0 (เท่ากับ stop_time) เพื่อให้ค่าค้างไว้จนจบการรัน
+        params.ref_time = [0; 0.00000001; params.stop_time];
+        params.ref_data = [target_deg; target_deg; target_deg]; 
         params.moter    = [1; 1; 1];
         
-        fprintf('Simulating %s at %d deg...\n', trial_name, target_deg);
+        fprintf('Simulating %s at %d deg (Step at 1s)...\n', trial_name, target_deg);
         
-        % เรียกใช้ฟังก์ชันเดิมของคุณ
+        % เรียกใช้ฟังก์ชัน Simulate
         Lab2_manual_simulate_controller(params); 
     end
 end
