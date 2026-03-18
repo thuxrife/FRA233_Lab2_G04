@@ -9,22 +9,25 @@ kt = 50.6e-3;
 ke = 52.8e-3;
 Lm = 2.8544e-3;
 Rm = 3.3133;
-R = Rm;
 bm = 77.851e-6;
 b = bm;
 Jm = 58.559e-6;
 J = Jm;
 T = Lm/Rm;
 
-kp = 0.071701766537834;
-ki = 0;
-kd = 0.1111;
-N = 100; % Filter and Shit
-ref_angle = 180;
+Kp_pos = 0.0;
+Ki_pos = 0.0;
+Kd_pos = 0.0;
+
+Kp_vel = 0.0;
+Ki_vel = 0.0;
+Kd_vel = 0.0;
+
+N_pos = 100; % Filter and Shit
+N_vel = 100;
+
 init_angle = 0;
 gravity_compensation_mode = 1;
-method_pid = 2;
-
 
 z2 = (Jm * mp*L^2)* Lm;
 z1 = (mp*L^2 + Jm);
