@@ -33,7 +33,7 @@ hold on; grid on;
 
 cases = {C_p_base, C_pi_base};
 colors = {'b', 'g'};
-names = {'P', 'PI'};
+names = {PD'};
 for i = 1:length(cases)
     % ระบบ Open-loop ของแต่ละเคส (C * G)
     L = cases{i} * G;
