@@ -1,11 +1,18 @@
-function Lab2_manual_simulate_controller(params)
+function data = Lab2_manual_simulate_controller(params)
     % 1. --- Map Input Parameters ---
-    % (Keeping your original mapping logic)
-    kp = params.kp; ki = params.ki; kd = params.kd; N = params.N; 
+    kp = params.kp; 
+    ki = params.ki; 
+    kd = params.kd; 
+    N  = params.N; 
     init_angle = params.init;
     method_pid = params.method; 
     gravity_compensation_mode = params.gravity_mode; 
-    ref_signal = [params.ref_time(:), params.ref_data(:)];
+    
+    % --- NEW: Add Ts variable for Simulink (Fixed Step Time) ---
+    % ประกาศตัวแปร Ts เพื่อให้บล็อกใน Simulink ที่ใช้ชื่อนี้ดึงค่าไปใช้ได้อัตโนมัติ
+    Ts = params.sampling_time; 
+    
+    ref_signal   = [params.ref_time(:), params.ref_data(:)];
     motor_toggle = [params.ref_time(:), params.moter(:)];
 
     % Plant Parameters
@@ -14,11 +21,12 @@ function Lab2_manual_simulate_controller(params)
     T = Lm / R;
 
     % 2. --- Run Simulation ---
+    % ใช้ 'SrcWorkspace', 'current' เพื่อให้ Simulink มองเห็นตัวแปร Ts, kp, ki ในฟังก์ชันนี้
     sim_out = sim('Lab2_single_loop_controller_student', ...
                   'StopTime', num2str(params.stop_time), ...
                   'SrcWorkspace', 'current');
 
- % 3. --- Organize Data ---
+    % 3. --- Organize Data ---
     try
         eff_mat  = sim_out.plant_effort.Data;
         sens_mat = sim_out.sensor.Data;
@@ -26,8 +34,7 @@ function Lab2_manual_simulate_controller(params)
         
         data.plant_effort.time = sim_out.tout;
         
-        % --- NEW: Sync Motor State with Simulation Time ---
-        % This recreates the 0/1 signal to match the length of the other data
+        % --- Sync Motor State with Simulation Time ---
         data.motor_state = interp1(params.ref_time, params.moter, data.plant_effort.time, 'previous', 'extrap');
         
         % --- Plant Effort (Indices 1-4) ---
@@ -59,7 +66,7 @@ function Lab2_manual_simulate_controller(params)
         return;
     end
 
-    % 4. --- Storage (Including Motor State in Table) ---
+    % 4. --- Storage (Saving Data and Metadata) ---
     trial_root = fullfile(params.master_folder, params.trial_name);
     if ~exist(trial_root, 'dir'), mkdir(trial_root); end
     
@@ -69,13 +76,13 @@ function Lab2_manual_simulate_controller(params)
     
     SAVE_PATH = fullfile(trial_root, folder_name);
     if ~exist(SAVE_PATH, 'dir'), mkdir(SAVE_PATH); end
-
+    
     % Save .mat file
     save(fullfile(SAVE_PATH, 'raw_sim_data.mat'), 'data');
     
-    % --- Updated Table with 'Motor_Toggle' column ---
+    % --- Create Table and Save to Excel ---
     T_all = table(data.plant_effort.time, ...
-        data.motor_state, ...  % <--- NEW COLUMN
+        data.motor_state, ...  
         data.plant_effort.plant_input_sat, data.plant_effort.plant_input, ...
         data.plant_effort.v_pid_out, data.plant_effort.v_compense, ...
         data.sensor.ref_rad, data.sensor.err_rad, ...
@@ -97,5 +104,5 @@ function Lab2_manual_simulate_controller(params)
     T_meta = struct2table(params, 'AsArray', true);
     writetable(T_meta, fullfile(SAVE_PATH, 'metadata.xlsx'));
     
-    fprintf('SUCCESS: Saved Data (19 signals) and Metadata in %s\n', SAVE_PATH);
+    fprintf('SUCCESS: Saved Data (Ts = %.4f) in %s\n', Ts, SAVE_PATH);
 end

@@ -71,6 +71,26 @@ folder_slots = {
     % 'lab2_part3_results\PD4_Noise_Sensitivity_test\P0.06_I0.00_D0.00\Run_00_2026-03-18_010917_TimeSeries';    
     % 'lab2_part3_results\PD4_Noise_Sensitivity_test\P0.06_I0.00_D0.02\Run_00_2026-03-18_010933_TimeSeries';
     % 'lab2_part3_results\PD3_Noise_Sensitivity_test\P0.06_I0.00_D0.02\Run_05_2026-03-18_004901_TimeSeries';
+
+    %% Continous vs Discrete
+    % 'lab2_part6_1_results\Hz1000_Ideal\M5_Ts0.001\Run_00_2026-03-19_154450_TimeSeries';
+    % 
+    % 'lab2_part6_1_results\Hz1000_Forward\M6_Ts0.001\Run_00_2026-03-19_154512_TimeSeries';
+    % 'lab2_part6_1_results\Hz1000_Backward\M7_Ts0.001\Run_00_2026-03-19_154531_TimeSeries';
+    % 'lab2_part6_1_results\Hz1000_Tustin\M8_Ts0.001\Run_00_2026-03-19_154546_TimeSeries';
+    % 
+    % 'lab2_part6_1_results\Hz10_Forward\M6_Ts0.100\Run_00_2026-03-19_154715_TimeSeries';
+    % 'lab2_part6_1_results\Hz10_Backward\M7_Ts0.100\Run_00_2026-03-19_154730_TimeSeries';
+    % 'lab2_part6_1_results\Hz10_Tustin\M8_Ts0.100\Run_00_2026-03-19_154747_TimeSeries';
+    % 
+    % 'lab2_part6_1_results\Hz1_Forward\M6_Ts1.000\Run_00_2026-03-19_154802_TimeSeries';
+    % 'lab2_part6_1_results\Hz1_Backward\M7_Ts1.000\Run_00_2026-03-19_154817_TimeSeries';
+    % 'lab2_part6_1_results\Hz1_Tustin\M8_Ts1.000\Run_00_2026-03-19_154833_TimeSeries';
+
+    %% Changing PID in Discrete
+    % 'lab2_part6_1_results\Hz1000_Forward\M6_Ts0.001\Run_05_2026-03-19_162707_TimeSeries';
+    % 'lab2_part6_1_results\Hz1000_Backward\M7_Ts0.001\Run_05_2026-03-19_162727_TimeSeries';
+    % 'lab2_part6_1_results\Hz1000_Tustin\M8_Ts0.001\Run_05_2026-03-19_162742_TimeSeries';
 };
 
 % --- TIME WINDOW (กำหนดช่วงเวลาที่จะพลอตกราฟตรงนี้) ---
@@ -84,8 +104,8 @@ run_color_palette = {'#0072BD', '#D95319', '#7E2F8E', '#107C10', '#cc0041','#7c7
 % Columns: {Group, Signal, Y-Axis, Base_Color, Line_Style}
 compare_props = {
     % --- GROUP 1: SENSORS (Left Axis: Degrees) ---
-    'sensor',       'ref_rad',             'left',  '#000000',   '-';   % BLACK (The King)
-    % 'sensor',       'sensor_measured',     'left',  '#982598',   '-';   % ORANGE 
+    % 'sensor',       'ref_rad',             'left',  '#000000',   '-';   % BLACK (The King)
+    'sensor',       'sensor_measured',     'left',  '#982598',   '-';   % ORANGE 
     % 'sensor',       'err_rad',             'left',  '#A52A2A',   '.-';  
     % 'sensor',       'sensor_noise',        'left',  '#D2691E',   ':';   
     % 'sensor',       'sensor_measured_raw', 'left',  '#808080',   '-';   
@@ -93,11 +113,11 @@ compare_props = {
 
     % % --- GROUP 2: CONTROLLER (Right Axis: Volts) ---
     % 'controller',   'v_pid_sat',           'right', '#1A05A2',   '-';   % BLUE
-    'controller',   'v_pid',               'right', '#1A05A2',   '-';  
+    % 'controller',   'v_pid',               'right', '#1A05A2',   '-';  
     % 'controller',   'KP_sat',              'right', '#8F0177',   '-';   % CYAN
     % 'controller',   'KP',                  'right', '#8F0177',   ':';  
     % 'controller',   'KI_sat',              'right', '#F67D31',   '-';   % ROYAL BLUE
-    'controller',   'KI',                  'right', '#F67D31',   '--';  
+    % 'controller',   'KI',                  'right', '#F67D31',   '--';  
     % 'controller',   'KD_sat',              'right', '#8A2BE2',   '--';   % PURPLE
     % 'controller',   'KD',                  'right', '#8A2BE2',   '-';  
     
@@ -112,14 +132,22 @@ compare_props = {
 figure(1); clf; 
 set(gcf, 'Color', 'w', 'Units', 'normalized', 'Position', [0.1, 0.1, 0.6, 0.6]);
 
-run_analysis_integrated(folder_slots, compare_props, base_path, run_color_palette, plot_start, plot_stop, 'P Controller with and without Gravity Compensation');
+run_analysis_integrated(folder_slots, compare_props, base_path, run_color_palette, plot_start, plot_stop, 'PID(s) vs PID(z) @Ts = 1Hz');
 
-%% 3. INTEGRATED CORE LOGIC FUNCTION
 function run_analysis_integrated(slots, props, base, palette, t_start, t_stop, title_str)
     hold on; grid on;
     hasLeft = false; hasRight = false;
     
     for f = 1:numel(slots)
+        % --- การดึงชื่อโฟลเดอร์แบบถอยหลัง ---
+        % Level 1: ถอยจาก 'Run_00...' -> ได้ 'M6_Ts0.100'
+        [path_to_method, ~, ~] = fileparts(slots{f}); 
+        [~, method_folder, ~] = fileparts(path_to_method);
+        
+        % Level 2: ถอยจาก 'M6_Ts0.100' -> ได้ 'Hz10_Forward'
+        [path_to_cat, ~, ~] = fileparts(path_to_method);
+        [~, category_folder, ~] = fileparts(path_to_cat);
+        
         % Load Data
         data_path = fullfile(base, slots{f}, 'raw_sim_data.mat');
         if ~exist(data_path, 'file')
@@ -129,35 +157,32 @@ function run_analysis_integrated(slots, props, base, palette, t_start, t_stop, t
         load(data_path);
         t = data.plant_effort.time;
         
-        % --- COLOR LOGIC (Locked per Run) ---
+        % --- COLOR LOGIC ---
         color_idx = mod(f-1, numel(palette)) + 1;
         run_hex = palette{color_idx};
         run_color = [hex2dec(run_hex(2:3)), hex2dec(run_hex(4:5)), hex2dec(run_hex(6:7))]/255;
 
         for p = 1:size(props, 1)
-            grp=props{p,1}; sig=props{p,2}; side=props{p,3}; style=props{p,5}; % ดึงค่าจาก Column 5
+            grp=props{p,1}; sig=props{p,2}; side=props{p,3}; style=props{p,5}; 
             
             try
                 y = data.(grp).(sig);
                 yyaxis(side);
                 if strcmp(side, 'left'), hasLeft = true; else, hasRight = true; end
                 
-                % --- SIGNAL COLOR & LINE STYLE ---
                 if strcmp(sig, 'ref_rad')
-                    final_c = [0 0 0]; % ล็อค Reference เป็นสีดำ
-                    lw = 1.5;
+                    final_c = [0 0 0]; lw = 1.5;
+                    display_label = 'Reference'; 
                 else
-                    final_c = run_color; % ใช้สีจาก Palette
-                    lw = 1.2; % ปรับเส้นให้บางลงเล็กน้อยเพื่อให้เห็น Noise ชัดขึ้น
+                    final_c = run_color; lw = 1.2;
+                    % --- แก้ไขชื่อ Legend ให้เห็น Category และ Method ชัดๆ ---
+                    display_label = sprintf('[%s] %s: %s', category_folder, method_folder, sig);
                 end
                 
-                % Convert Units
                 if strcmp(grp, 'sensor'), y = y * (180/pi); end
                 
-                % Plot (Force NO MARKERS)
                 plot(t, y, 'Color', final_c, 'LineWidth', lw, 'LineStyle', style, ...
-                     'Marker', 'none', ... % สั่งปิดจุด (Marker) อย่างเด็ดขาด
-                     'DisplayName', sprintf('Run%d: %s', f, sig));
+                     'Marker', 'none', 'DisplayName', display_label);
             catch
                 fprintf('Error plotting: %s.%s\n', grp, sig);
             end
@@ -169,14 +194,13 @@ function run_analysis_integrated(slots, props, base, palette, t_start, t_stop, t
         yyaxis left; ylabel('Angle (Deg)'); set(gca, 'YColor', 'k');
         yl = ylim; pad = diff(yl) * 0.10; ylim([yl(1)-pad, yl(2)+pad]);
     end
-    
     if hasRight
         yyaxis right; ylabel('Effort (V)'); set(gca, 'YColor', 'k');
         yr = ylim; pad = diff(yr) * 0.10; ylim([yr(1)-pad, yr(2)+pad]);
     end
-    
     xlabel('Time (s)'); xlim([t_start, t_stop]);
     title(title_str, 'FontSize', 14);
+    % ป้องกันเครื่องหมาย _ กลายเป็นตัวห้อย
     legend('show', 'Location', 'northeastoutside', 'Interpreter', 'none');
     grid on;
 end

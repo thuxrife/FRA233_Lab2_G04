@@ -2,27 +2,27 @@ function data = Lab2_cascade_simulate_controller(params, save_flag)
     if nargin < 2, save_flag = 0; end 
     
     % 1. --- Map Input & Finite Guard ---
-    % ตรวจสอบ Gain ทุกตัวว่าต้องเป็น Finite (ไม่ใช่ NaN/Inf) และห้ามเป็นลบ
     gains = {'Kp_pos', 'Ki_pos', 'Kd_pos', 'Kp_vel', 'Ki_vel', 'Kd_vel'};
     for i = 1:length(gains)
         if ~isfinite(params.(gains{i})) || params.(gains{i}) < 0
-            params.(gains{i}) = 1e-5; % กันพลาดให้เป็นค่าต่ำๆ ไว้
+            params.(gains{i}) = 1e-5; % กันค่าติดลบหรือ NaN
         end
     end
-
-    % Assign to Base Workspace
+    
+    % ส่งตัวแปรเข้า Base Workspace
     vars = fieldnames(params);
-    for i = 1:length(vars)
-        assignin('base', vars{i}, params.(vars{i}));
-    end
+    for i = 1:length(vars), assignin('base', vars{i}, params.(vars{i})); end
     assignin('base', 'R', params.Rm);
     assignin('base', 'sampling_time_pos', params.sampling_time * params.sampling_ratio);
     assignin('base', 'sampling_time_vel', params.sampling_time);
     assignin('base', 'gravity_compensation_mode', params.gravity_mode);
+    assignin('base', 'Ts', params.sampling_time); 
 
     % 2. --- Run Simulation ---
     try
-        sim_out = sim('Lab2_cascade_controller_student', 'StopTime', num2str(params.stop_time));
+        sim_out = sim('Lab2_cascade_controller_student', ...
+                      'StopTime', num2str(params.stop_time), ...
+                      'SrcWorkspace', 'base');
         
         % 3. --- Organize Data ---
         dist_mat = sim_out.disturbance.Data;
@@ -33,6 +33,7 @@ function data = Lab2_cascade_simulate_controller(params, save_flag)
         data.time = sim_out.tout;
         data.motor_state = ones(size(data.time));
         
+        % Mapping 4 กลุ่มตาม image_efedaa.png
         data.disturbance.noise_torque = dist_mat(:,1);
         data.disturbance.noise_sensor = dist_mat(:,2);
         data.control_effort.vin        = eff_mat(:,1);
@@ -47,10 +48,11 @@ function data = Lab2_cascade_simulate_controller(params, save_flag)
         data.position_loop.position_measured = pos_mat(:,2);
         data.position_loop.position_error    = pos_mat(:,3);
 
-        % --- Verification Logic ---
-        % ใช้ try-catch กัน stepinfo พังกรณีสัญญาณ Diverge
+        % --- Verification Logic (Safe Stepinfo) ---
         try
-            s_info_vel = stepinfo(data.velocity_loop.velocity_measured, data.time, data.velocity_loop.velocity_ref(end));
+            v_ref_final = data.velocity_loop.velocity_ref(end);
+            if v_ref_final == 0, v_ref_final = 1; end % กันหารศูนย์
+            s_info_vel = stepinfo(data.velocity_loop.velocity_measured, data.time, v_ref_final);
             s_info_pos = stepinfo(data.position_loop.position_measured, data.time, data.position_loop.position_ref(end));
             data.verify.os_vel = s_info_vel.Overshoot;
             data.verify.os_pos = s_info_pos.Overshoot;
@@ -58,27 +60,25 @@ function data = Lab2_cascade_simulate_controller(params, save_flag)
             data.verify.os_vel = 999; data.verify.os_pos = 999;
         end
         
-        % Steady State Error (คำนวณจากช่วงท้าย 20%)
         idx_check = round(length(data.time)*0.8) : length(data.time);
         data.verify.abs_err_vel = max(abs(data.velocity_loop.velocity_error(idx_check)));
         data.verify.abs_err_pos = max(abs(data.position_loop.position_error(idx_check)));
         
     catch ME
-        % กรณี Sim พัง (Diverge) ให้คืนค่า Error สูงๆ เพื่อให้ตัวจูนรู้
+        % โชว์สาเหตุที่พัง
+        fprintf('\n[!] Simulation Failed: %s\n', ME.message);
         data.time = [0];
         data.verify.os_vel = 999; data.verify.os_pos = 999;
         data.verify.abs_err_vel = 999; data.verify.abs_err_pos = 999;
-        if save_flag, fprintf('Sim Error: %s\n', ME.message); end
     end
 
-    % 4. --- Storage & Excel (Only if save_flag is 1) ---
+    % 4. --- Storage & Excel ---
     if save_flag == 1 && length(data.time) > 1
         trial_root = fullfile(params.master_folder, params.trial_name);
-        if ~exist(trial_root, 'dir'), mkdir(trial_root); end
+        if ~exist(trial_root, 'dir'), mkdir(trial_root, 'recursive'); end
         
         SAVE_PATH = fullfile(trial_root, sprintf('FinalRun_%s', datestr(now, 'HHMMss')));
         mkdir(SAVE_PATH);
-        
         save(fullfile(SAVE_PATH, 'raw_sim_data.mat'), 'data');
         
         % Excel Export (15 Columns)
@@ -95,14 +95,16 @@ function data = Lab2_cascade_simulate_controller(params, save_flag)
         writetable(T_all, fullfile(SAVE_PATH, 'raw_sim_data.xlsx'));
         
         % Plot Performance
-        fig = figure('Visible', 'off'); % ไม่ต้องโชว์หน้าต่างตอนเซฟ
+        fig = figure('Visible', 'off');
         subplot(2,1,1);
         plot(data.time, data.position_loop.position_ref, 'k--', data.time, data.position_loop.position_measured, 'b');
-        title(['Position Loop (OS: ', num2str(data.verify.os_pos, '%.2f'), '%)']); grid on;
+        title(['Pos Loop (OS: ', num2str(data.verify.os_pos, '%.2f'), '%)']); grid on;
         subplot(2,1,2);
         plot(data.time, data.velocity_loop.velocity_ref, 'k--', data.time, data.velocity_loop.velocity_measured, 'r');
-        title(['Velocity Loop (OS: ', num2str(data.verify.os_vel, '%.2f'), '%)']); grid on;
+        title(['Vel Loop (OS: ', num2str(data.verify.os_vel, '%.2f'), '%)']); grid on;
         saveas(fig, fullfile(SAVE_PATH, 'performance_plot.png'));
         close(fig);
+        
+        fprintf('SUCCESS: Saved 15 columns in %s\n', SAVE_PATH);
     end
 end
